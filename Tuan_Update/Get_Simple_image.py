@@ -61,10 +61,11 @@ def telemetry(sid, data):
             # print(image.shape)
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             cv2.imshow("image", image)
-            canny = lane_detect_module.preprocess(image, medianKsize = 3, s_offset = 10, 
+            cv2.imwrite("image.jpg", image)
+            canny = lane_detect_module.preprocess(image, medianKsize = 3, s_offset = 20, 
                                                   v_offset = 60, CannyThres1 = 100, CannyThres2 = 200)
-            # cv2.imshow("canny", canny)
-            # sendBack_angle = line_detect(canny)
+            cv2.imshow("canny", canny)
+            a = lane_detect_module.line_detect(canny)
             cv2.waitKey(1)
             #------------------------------------------------------------------------------------------------------#
             # print('{} : {}'.format(sendBack_angle, sendBack_Speed))
