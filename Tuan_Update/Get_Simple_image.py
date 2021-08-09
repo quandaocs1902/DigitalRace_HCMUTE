@@ -10,6 +10,7 @@ from io import BytesIO
 from sklearn.linear_model import RANSACRegressor
 import math
 import lane_detect_module
+import random
 #------------- Add library ------------#
 
 #--------------------------------------#
@@ -60,10 +61,10 @@ def telemetry(sid, data):
             #------------------------------------------  Work space  ----------------------------------------------#
             # print(image.shape)
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            cv2.imshow("image", image)
-            cv2.imwrite("image.jpg", image)
-            canny = lane_detect_module.preprocess(image, medianKsize = 3, s_offset = 20, 
-                                                  v_offset = 60, CannyThres1 = 100, CannyThres2 = 200)
+            # cv2.imshow("image", image)
+            # cv2.imwrite(name, image)
+            canny = lane_detect_module.preprocess(image, alpha= 1.2, beta=-60, medianKsize = 3, 
+                                                  s_offset = 45, v_offset = 115, CannyThres1 = 100, CannyThres2 = 180)
             cv2.imshow("canny", canny)
             a = lane_detect_module.line_detect(canny)
             cv2.waitKey(1)

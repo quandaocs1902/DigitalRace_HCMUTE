@@ -4,13 +4,15 @@ import cv2 as cv
 from sklearn.metrics import mean_squared_error
 from numpy.lib.polynomial import polyfit
 import math
+
+
 def pers_transform(img):
     img_size = (img.shape[1], img.shape[0])
-    src = np.float32([[0, 180], [160 - 48, 110],
-                     [160 + 48, 110], [320, 180]])
+    src = np.float32([[0, 90], [160 - 352/7, 30],
+                     [160 + 352/7, 30], [320, 90]])
 
     # cv2.imshow("img", img)
-    offset = [75, 0]
+    offset = [85, 0]
     dst = np.float32([src[0] + offset, np.array([src[0, 0], 0]) + offset,
                       np.array([src[3, 0], 0]) - offset, src[3] - offset])
 
@@ -20,17 +22,23 @@ def pers_transform(img):
     birdview = cv.warpPerspective(img, M, img_size)
     return birdview
 # Find average threshold of line
+
+
 def find_threshold(img):
-    roi = img[120:160, 140:180]
+    roi = img[40:70, 145:175]
     threshold = np.mean(roi)
     return threshold
 
 # Data preprocessing
-def preprocess(img, medianKsize = 3, s_offset = 20, v_offset = 50, CannyThres1 = 100, CannyThres2 = 200):
+
+
+def preprocess(img, alpha=1, beta=0, medianKsize=3, s_offset=20, v_offset=50, CannyThres1=100, CannyThres2=200):
     """
         preprocess function detect edges of the lane
 
         :param img: raw image got from simulation
+        :param alpha: contrast control
+        :param beta: brightness control
         :param medianKsize: kernel size for Median Blur
         :param s_offset: offset to find mean threshold for s image
         :param v_offset: offset to find mean threshold for v image
@@ -41,28 +49,52 @@ def preprocess(img, medianKsize = 3, s_offset = 20, v_offset = 50, CannyThres1 =
     """
     # Read image
     global warped
-    # img = cv.imread(str(image_path), cv.IMREAD_COLOR)
-    warped = pers_transform(img)
-    cv.imshow("warp", warped)
+    
     # Convert in to HSV color space
-    hsv = cv.cvtColor(warped, cv.COLOR_BGR2HSV)
-    h, s, v = cv.split(hsv)
-    # Blurr image
-    s_blurred = cv.medianBlur(s, medianKsize)
-    v_blurred = cv.medianBlur(v, medianKsize)
+    roi = img[90:, :]
+    # cv.circle(roi, (145, 40), 2, (255, 0, 0), 2)
+    # cv.circle(roi, (175, 40), 2, (255, 0, 0), 2)
+    # cv.circle(roi, (145, 70), 2, (255, 0, 0), 2)
+    # cv.circle(roi, (175, 70), 2, (255, 0, 0), 2)
+    
+    # cv.imwrite("image.jpg", roi)
+    cv.imshow("goc", roi)
 
+    # roi = cv.convertScaleAbs(roi, alpha = alpha, beta = beta)
+
+    hsv = cv.cvtColor(roi, cv.COLOR_BGR2HSV)
+    h, s, v = cv.split(hsv)
+
+    # v = cv.convertScaleAbs(v, alpha = alpha, beta = beta)
+    
+    v = cv.equalizeHist(v)
+    # Blurr image
+
+    # s_blurred = cv.medianBlur(s, medianKsize)
+    # v_blurred = cv.medianBlur(v, medianKsize)
     # Convert to binary image
     s_threshold = find_threshold(s) + s_offset
     v_threshold = find_threshold(v) + v_offset
-
-    _, s_thresh = cv.threshold(s_blurred, s_threshold, 255, cv.THRESH_BINARY_INV)
-    _, v_thresh = cv.threshold(v_blurred, v_threshold, 255, cv.THRESH_BINARY)
-    final = cv.bitwise_and(s_thresh, v_thresh)[30:, :]
-    # final = cv.bitwise_and(s_thresh, v_thresh)
-    cv.imshow("s_thresh", s_thresh)
-    cv.imshow("v_thresh", v_thresh)
-    canny = cv.Canny(final, CannyThres1, CannyThres2)
+    # print(v_threshold)
+    _, s_thresh = cv.threshold(s, s_threshold, 255, cv.THRESH_BINARY_INV)
+    _, v_thresh = cv.threshold(v, 230, 255, cv.THRESH_BINARY)
+    # final = cv.bitwise_and(s_thresh, v_thresh)[70:, :]
+    final = cv.bitwise_and(s_thresh, v_thresh)
+    # kernel = np.ones((3,3),np.uint8)
+    # final = cv.dilate(final, kernel, iterations = 1)
+    
+    cv.imshow("v", v)
+    # cv.imshow("s", s)
+    # cv.imshow("s_thresh", s_thresh)
+    # cv.imshow("v_thresh", v_thresh)
+    cv.imshow("final.", final)
+    warped = pers_transform(final)
+    kernel = np.ones((3,3), np.uint8)
+    warped = cv.morphologyEx(warped, cv.MORPH_OPEN, kernel)
+    canny = cv.Canny(warped, CannyThres1, CannyThres2)
+    # cv.imshow("warped", warped)
     return canny
+
 
 def downsample(ROI):
     col_index = 0
@@ -78,14 +110,18 @@ def downsample(ROI):
     return result
 
 # Get consecutive array
+
+
 def ranges(nums):
     gaps = [[s, e]
-            for s, e in zip(nums, nums[1:]) if (s + 1 < e and s + 30 < e)]
+            for s, e in zip(nums, nums[1:]) if (s + 15 < e and s + 30 < e)]
     edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
     return list(zip(edges, edges))
 
 # Determine xLeft, xMid, xRight
-def getmeanX(process, left_thres = 80, right_thres = 160):
+
+
+def getmeanX(process, left_thres=80, right_thres=220):
     dataLeft = []
     dataRight = []
     # dataMid = []
@@ -100,13 +136,13 @@ def getmeanX(process, left_thres = 80, right_thres = 160):
                     dataLeft.append(left)
                     # Tuple to draw circle
                     l = (np.mean(j, dtype = np.int), 5 + i * 10)
-                    cv.circle(warped, l, 2, (214, 57, 17), 2)
+                    cv.circle(warped, l, 2, (255, 0, 0), 2)
                 elif (np.mean(j, dtype=np.int) >= right_thres):
                     right = [np.mean(j, dtype=np.int), 5 + i * 10]
                     dataRight.append(right)
                     # Tuple to draw circle
                     r = (np.mean(j, dtype = np.int), 5 + i * 10)
-                    cv.circle(warped, r, 2, (0, 84, 163), 2)
+                    cv.circle(warped, r, 2, (255, 0, 0), 2)
                 # else:
                 #     dataMid.append((np.mean(j, dtype=np.int), 5 + i * 10))
         except IndexError:
@@ -114,60 +150,69 @@ def getmeanX(process, left_thres = 80, right_thres = 160):
         cv.imshow("warped", warped)
     return [np.asarray(dataLeft, dtype=np.int), np.asarray(dataRight, dtype=np.int)]
 
-# Using Ransac to fit lane
-def ransacSklearn(data, img):
-    data = np.sort(data, axis = 0)
-    X = np.asarray(data[: , 0], dtype = np.int32)
-    y = data[: , 1]
-    lineX = X.reshape((len(data), 1))
 
-    ransac = RANSACRegressor()
+class PolynomialRegression(object):
+    def __init__(self, degree=2, coeffs=None):
+        self.degree = degree
+        self.coeffs = coeffs
+
+    def fit(self, X, y):
+        self.coeffs = np.polyfit(X.ravel(), y, self.degree)
+
+    def get_params(self, deep=False):
+        return {'coeffs': self.coeffs}
+
+    def set_params(self, coeffs=None, random_state=None):
+        self.coeffs = coeffs
+
+    def predict(self, X):
+        poly_eqn = np.poly1d(self.coeffs)
+        y_hat = poly_eqn(X.ravel())
+        return y_hat
+
+    def score(self, X, y):
+        return mean_squared_error(y, self.predict(X))
+
+# Using Ransac to fit lane
+
+
+def ransacSklearn(data, img, order=0):
+    data = np.sort(data, axis=0)
+    X = np.asarray(data[:, 0], dtype=np.int32)
+    y = data[:, 1]
+    if(order == 1):
+        pass
+    else:
+        X = np.flipud(X)
+        # y = np.flipud(y)
+
+    lineX = X.reshape((len(data), 1))
+    ransac = RANSACRegressor(PolynomialRegression(degree=3), residual_threshold=2 * np.std(y), random_state=0)
     ransac.fit(lineX, y)
     lineY = ransac.predict(lineX)
-
-    poly_Coef = np.polyfit(X, lineY, 1)
+    poly_Coef = np.polyfit(X, lineY, 2)
     lineY = np.polyval(poly_Coef, lineX).reshape((-1, 1))
     result = np.hstack((lineX, lineY))
     cv.polylines(img, [np.int32(result)], False, (255, 0, 0), 2)
 
     return poly_Coef
 
-class PolynomialRegression(object):
-    def __init__(self, degree = 2, coeffs = None):
-        self.degree = degree
-        self.coeffs = coeffs
-    
-    def fit(self, X, y):
-        self.coeffs = np.polyfit(X.ravel(), y, self.degree)
-
-    def get_params(self, deep = False):
-        return {'coeffs': self.coeffs}
-    
-    def set_params(self, coeffs = None, random_state = None):
-        self.coeffs = coeffs
-    
-    def predict(self, X):
-        poly_eqn = np.poly1d(self.coeffs)
-        y_hat = poly_eqn(X.ravel())
-        return y_hat
-    
-    def score(self, X, y):
-        return mean_squared_error(y, self.predict(X))
 
 def get_angle(xLeft, xRight, y):
     xMid = (xLeft + xRight) // 2
     error_angle = math.atan((xMid - 160) // 2)
-    return error_angle  
+    return error_angle
+
 
 def line_detect(img):
     process = downsample(img)
     left, right = getmeanX(process)
     try:
-        leftCurve = ransacSklearn(left, img)        
+        leftCurve = ransacSklearn(left, img)
     except Exception:
         pass
     try:
-        rightCurve = ransacSklearn(right, img)
+        rightCurve = ransacSklearn(right, img, order = 1)
 
     except Exception:
         pass
